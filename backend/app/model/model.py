@@ -161,3 +161,140 @@ class Model(nn.Module):
                 decoder_embedded_input = self.embedding_layer(decoder_input)
 
         return final_dists
+
+    def generate(
+        self, 
+        input_ids, 
+        ext_input_ids, 
+        attention_mask, 
+        max_len=100, 
+        beam_size=5
+    ):
+        """
+        input_ids: [B, S, W]
+        extend_input_ids: [B, S, W]
+        attention_mask: [B, S, W]
+        oov_lists: [B, []]
+        """
+
+        self.eval()
+        B, S, W = input_ids.shape
+        sos_id = self.vocab.sos_id
+        eos_id = self.vocab.eos_id
+        vocab_size = len(self.vocab)
+        device = input_ids.device
+        
+        with torch.no_grad():
+
+            enc_embedded_input = self.embedding_layer(input_ids)
+            
+            sent_hidden, word_outputs = self.encoder(enc_embedded_input, attention_mask)
+            
+            enc_proj = self.decoder.attention.enc_proj(word_outputs)
+            enc_proj = self.decoder.attention.enc_norm(enc_proj)
+                        
+            h = self.adapter(sent_hidden).unsqueeze(0)
+            h = F.relu(h)
+            h = h.repeat_interleave(beam_size, dim=1)
+            c = torch.zeros_like(h)
+            decoder_state = (h, c)
+            
+            input_ids = input_ids.view(B, -1)
+            ext_input_ids = ext_input_ids.view(B, -1)
+            encoder_mask = attention_mask.view(B, -1)
+            ext_vocab_size = ext_input_ids.max().item() + 1
+
+            word_outputs  = word_outputs.repeat_interleave(beam_size, dim=0)   # [B*beam_size, S*W, 2HW]
+            enc_proj = enc_proj.repeat_interleave(beam_size, dim=0)       # [B*beam_size, S*W, A]
+            encoder_mask  = encoder_mask.repeat_interleave(beam_size, dim=0)   # [B*beam_size, S*W]
+            ext_input_ids = ext_input_ids.repeat_interleave(beam_size, dim=0)  # [B*beam_size, S*W]
+            input_ids = input_ids.repeat_interleave(beam_size, dim=0)
+            
+            # seqs: [B * beam-size, n]
+            # log_probs: [B * beam-size]
+            seqs = torch.full((B * beam_size, 1), sos_id, dtype=torch.long, device=input_ids.device)
+            log_probs = torch.zeros(B * beam_size, device=input_ids.device)
+            decoder_embedded_input = self.embedding_layer(seqs[:, -1])
+            # List({'seq', 'log_prob'})
+            finished = [[] for _ in range(B)]
+
+            for _ in range(max_len):
+
+                # [B * beam_size, EV], ([1, B * beam-size, H], [1, B * beam-size, H])
+                final_dist, decoder_state = self.decoder(
+                    decoder_embedded_input, 
+                    decoder_state, 
+                    word_outputs,
+                    ext_input_ids, 
+                    ext_vocab_size,
+                    encoder_mask=encoder_mask,
+                    enc_proj=enc_proj
+                )
+
+                log_prob = final_dist.log()
+
+                # [B, beam-size, EV]
+                log_prob = log_prob.view(B, beam_size, -1)
+
+                # [B, beam-size, EV]
+                total_log_probs = log_probs.view(B, beam_size, 1) + log_prob
+                
+                # [B, beam-size * EV]
+                total_log_probs = total_log_probs.view(B, -1)
+
+                # [B, beam-size]
+                topk_log_probs, topk_ids = total_log_probs.topk(beam_size, dim=-1)
+                beam_indices = topk_ids // ext_vocab_size
+                token_indices = topk_ids % ext_vocab_size
+
+                flat_beam_indices = (beam_indices + (torch.arange(B, device=device) * beam_size).unsqueeze(1)).view(-1)
+
+                old_seqs = seqs[flat_beam_indices]
+                new_tokens = token_indices.view(-1, 1)
+                seqs = torch.cat([old_seqs, new_tokens], dim=1)
+
+                decoder_input = seqs[:, -1]
+                oov_mask = decoder_input >= vocab_size
+                if oov_mask.any():
+                    oov_tokens = decoder_input[oov_mask]
+                    token_pos = (ext_input_ids[oov_mask] == oov_tokens.unsqueeze(1)).float().argmax(dim=1)
+                    copied_token = input_ids[oov_mask, token_pos]
+                    decoder_input[oov_mask] = copied_token
+                decoder_embedded_input = self.embedding_layer(decoder_input)
+
+                new_h = decoder_state[0].index_select(1, flat_beam_indices)
+                new_c = decoder_state[1].index_select(1, flat_beam_indices)
+                decoder_state = (new_h, new_c)
+
+                log_probs = topk_log_probs.view(-1)
+                eos_mask = (token_indices == eos_id)
+                if eos_mask.any():
+                    # [[b, k], ...]
+                    eos_indices = eos_mask.nonzero(as_tuple=False)
+                    flat_eos_indices = eos_indices[:, 0] * beam_size + eos_indices[:, 1]
+
+                    eos_scores = log_probs[flat_eos_indices]
+                    eos_seqs = seqs[flat_eos_indices]
+
+                    for (b, k), score, seq in zip(eos_indices.tolist(), eos_scores.tolist(), eos_seqs):
+                        finished[b].append({
+                            'seq': seq.tolist(),
+                            'log_prob': score / (((5 + len(seq)) / 6) ** 0.6)
+                        })
+                    log_probs[flat_eos_indices] = -1e9
+                all_enough = all(len(finished[b]) >= beam_size for b in range(B))
+                if all_enough:
+                    break
+            
+            results = []
+            for b in range(B):
+                if finished[b]:
+                    best_seq = max(finished[b], key=lambda x: x['log_prob'])['seq']
+                else:
+                    best_seq = seqs[b * beam_size].tolist()
+                best_seq = best_seq[1:]
+                if eos_id in best_seq:
+                    id = best_seq.index(eos_id)
+                    best_seq = best_seq[:id]
+                results.append(best_seq)
+            return results
