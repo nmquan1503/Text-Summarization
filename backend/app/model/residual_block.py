@@ -5,13 +5,18 @@ class ResidualBlock(nn.Module):
         self,
         input_dim,
         hidden_dim,
-        activation=nn.ReLU,
+        activation="ReLU",
     ):
         super().__init__()
         self.norm = nn.LayerNorm(input_dim)
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, input_dim)
-        self.activation = activation()
+        if activation == "ReLU":
+            self.activation = nn.ReLU()
+        elif activation == "GELU":
+            self.activation = nn.GELU()
+        elif activation == "Tanh":
+            self.activation = nn.Tanh()
 
     def forward(self, x):
         x = self.norm(x)

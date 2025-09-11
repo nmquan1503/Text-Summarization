@@ -2,7 +2,7 @@ from ..core.vocab import Vocab
 import torch
 import torch.nn as nn
 import numpy as np
-import torch.functional as F
+import torch.nn.functional as F
 
 class Word2VecEmbedding(nn.Module):
     def __init__(self, vocab: Vocab):

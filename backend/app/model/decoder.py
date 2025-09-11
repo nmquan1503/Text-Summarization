@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.functional as F
+import torch.nn.functional as F
 from .attention import Attention
 from .pointer_generator import PointerGenerator
 from .residual_block import ResidualBlock
