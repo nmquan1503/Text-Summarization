@@ -3,6 +3,7 @@ from .tokenizer import Tokenizer
 from typing import Dict, Any, List, Union
 from .vocab import Vocab
 from ..model.model import Model
+from .post_processor import PostProcessor
 import json
 import torch
 
@@ -43,6 +44,7 @@ class ModelWrapper:
         self.model.load_state_dict(model_state_dict)
         self.max_output_length = max_output_length
         self.beam_size = beam_size
+        self.post_processor = PostProcessor
     
     def predict(self, value: Union[str, List[str]]) -> Union[str, List[str]]:
         if isinstance(value, str):
@@ -64,8 +66,8 @@ class ModelWrapper:
             seq = self.tokenizer.decode(pred, oov)
             seqs.append(seq)
         
-        seqs = [seq.replace('_', ' ') for seq in seqs]
-        
+        seqs = self.post_processor(seqs)
+
         if isinstance(value, str):
             return seqs[0]
         return seqs
