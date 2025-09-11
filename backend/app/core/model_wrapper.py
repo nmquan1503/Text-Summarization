@@ -44,7 +44,7 @@ class ModelWrapper:
         self.model.load_state_dict(model_state_dict)
         self.max_output_length = max_output_length
         self.beam_size = beam_size
-        self.post_processor = PostProcessor
+        self.post_processor = PostProcessor()
     
     def predict(self, value: Union[str, List[str]]) -> Union[str, List[str]]:
         if isinstance(value, str):

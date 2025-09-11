@@ -14,6 +14,5 @@ class PostProcessor:
         text = text.replace('_', ' ')
         text = re.sub(r'\s+([!.,@])', r'\1', text)
         text = re.sub(r" (['\"]) ", r'\1', text)
-        text = re.sub(r'(^\s*[a-z])', lambda m: m.group(1).upper(), text)
-        text = re.sub(r'([.!?]\s+)([a-z])', lambda m: m.group(1) + m.group(2).upper(), text)
+        text = re.sub(r'(^|[.!?]\s+)([a-z])', lambda m: m.group(1) + m.group(2).upper(), text)
         return text
