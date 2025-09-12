@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from .core.model_wrapper import ModelWrapper
@@ -30,6 +31,16 @@ async def lifespan(app: FastAPI):
     wrapper = None
 
 app = FastAPI(title='Vietnamese Text Summarization API', lifespan=lifespan)
+origins = [
+    "http://localhost:8080",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class Request(BaseModel):
     text: str
