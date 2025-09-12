@@ -39,6 +39,7 @@ class Cleaner:
             pattern = rf"(\d+(?:[\.,]\d+)?){unit}"
             repl = rf"\1 {unit}"
             text = re.sub(pattern, repl, text)
+        text = re.sub(r"([.,'\"()\/!@-])", r" \1 ", text)
         text = re.sub(r"\s+", ' ', text)
         text = word_tokenize(text, format='text')
         text = text.replace('km / h', 'km/h')
