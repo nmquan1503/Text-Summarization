@@ -253,7 +253,7 @@ class Model(nn.Module):
                 new_tokens = token_indices.view(-1, 1)
                 seqs = torch.cat([old_seqs, new_tokens], dim=1)
 
-                decoder_input = seqs[:, -1]
+                decoder_input = seqs[:, -1].clone()
                 oov_mask = decoder_input >= vocab_size
                 if oov_mask.any():
                     oov_tokens = decoder_input[oov_mask]
