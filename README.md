@@ -140,12 +140,16 @@ The model was evaluated on the test set using ROUGE metrics, which measure the o
 
 | Metric   | ROUGE-1 | ROUGE-2 | ROUGE-L |
 |----------|---------|---------|---------|
-| Precision | 0.6432  | 0.3121  | 0.5834  |
-| Recall    | 0.6125  | 0.3054  | 0.5652  |
-| F1-Score  | 0.6273  | 0.3087  | 0.5742  |
+| Precision | 0.6162  | 0.2550  | 0.3923  |
+| Recall    | 0.5365  | 0.2226  | 0.3416  |
+| F1-Score  | 0.5608  | 0.2322  | 0.3569  |
 
 Notes:
 
 - ROUGE-1: unigram overlap between generated and reference summaries.
 - ROUGE-2: bigram overlap.
 - ROUGE-L: longest common subsequence, capturing sentence-level structure.
+
+## Demo
+
+Watch the demo video on [YouTube](https://www.youtube.com/watch?v=Rr7ia3Bf-Fo).
